@@ -1,0 +1,88 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Axel Espinosa 'Zoom'"
+date: "12 de agosto de 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+## 2. Getting Data
+
+First we'll obtain the data for this project.
+
+```{r cars}
+ruta <- choose.dir(default = getwd(),caption = "Destiny Folder")
+URLTrain <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+URLTest <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+download.file(URLTrain, destfile = paste(ruta,"\\pml-training.csv",sep = ""))
+download.file(URLTest, destfile = paste(ruta,"\\pml-testing.csv",sep = ""))
+
+trainData <- read.csv(paste(ruta,"\\pml-training.csv",sep = ""), sep = ",", header = TRUE)
+
+testData <- read.csv(paste(ruta,"\\pml-testing.csv",sep = ""), sep = ",", header = TRUE)
+```
+
+## 3. Data Slicing
+
+Now the next task to perform is to slice the train data into a training and testing dataset, so the testData dataset will be our validation set.
+
+```{r}
+library(caret)
+inTrain <- createDataPartition(y = trainData$X, p = 0.7, list = FALSE)
+training <- trainData[inTrain, ]
+testing <- trainData[-inTrain, ]
+```
+
+## 4. Model (Random Forest)
+
+First we have to clean the dataset of the NA's, for simplicity we will make them 0's, also we will get rid of those variables that do not cotribute to the study and we will make the remaining variables numeric.
+
+```{r}
+classe_tr <- training$classe
+training <- training[, colSums(is.na(training)) == 0]
+classe_ts <- testing$classe
+testing <- testing[, colSums(is.na(testing)) == 0]
+testData <- testData[, colSums(is.na(testData)) == 0]
+
+training <- training[, !grepl("^X|timestamp|window", names(training))]
+training <- training[, sapply(training, is.numeric)]
+training$classe <- classe_tr
+testing <- testing[, !grepl("^X|timestamp|window", names(testing))]
+testing <- testing[, sapply(testing, is.numeric)]
+testing$classe <- classe_ts
+testData <- testData[, !grepl("^X|timestamp|window", names(testData))]
+testData <- testData[, sapply(testData, is.numeric)]
+```
+
+Because of the size of the training data we will use a random forest, also because of the number of variables, because it can handle hundreds of variables without excluding any.
+
+```{r}
+library(randomForest)
+
+modelFit <- randomForest(classe ~ ., data = training)
+```
+
+Then we will predict over the training and test sets
+
+```{r}
+predtr <- predict(modelFit, training)
+predts <- predict(modelFit, testing)
+
+confusionMatrix(predtr, training$classe)
+confusionMatrix(predts, testing$classe)
+```
+
+Applying the confusion matriz to the training dataset we have an accuracy of 99.42% and the estimated out-of-sample error is 0.58%. Now we apply this procedure to the testData as a validation dataset.
+
+```{r}
+predva <- predict(modelFit, testData[, -length(colnames(testData))])
+predva
+```
